@@ -308,6 +308,52 @@ fbq('track', 'PageView');
   .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s ease, transform .7s ease}
   .reveal.in{opacity:1;transform:none}
 
+  /* ---------- animated FX ---------- */
+  /* scroll progress bar */
+  .scroll-progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:100;
+    background:linear-gradient(90deg,var(--green),var(--clay));box-shadow:0 0 10px rgba(27,110,95,.4)}
+
+  /* hero aurora blobs */
+  .hero-aurora{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+  .hero-aurora span{position:absolute;border-radius:50%;filter:blur(64px);opacity:.55;will-change:transform}
+  .hero-aurora .a1{width:430px;height:430px;top:-130px;left:-90px;
+    background:radial-gradient(circle,#9fd9c8,transparent 70%);animation:drift1 19s ease-in-out infinite}
+  .hero-aurora .a2{width:360px;height:360px;top:30px;right:-110px;
+    background:radial-gradient(circle,#f1cdb6,transparent 70%);animation:drift2 23s ease-in-out infinite}
+  .hero-aurora .a3{width:300px;height:300px;bottom:-130px;left:38%;
+    background:radial-gradient(circle,#c5e8dc,transparent 70%);animation:drift3 21s ease-in-out infinite}
+  .hero .wrap{position:relative;z-index:1}
+  @keyframes drift1{0%,100%{transform:translate(0,0)}50%{transform:translate(44px,32px)}}
+  @keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(-38px,42px)}}
+  @keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(22px,-34px)}}
+
+  /* floating badge */
+  .badge-float{animation:floaty 4.5s ease-in-out infinite}
+  @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+
+  /* shine sweep on solid buttons */
+  .btn-primary,.btn-clay{position:relative;overflow:hidden}
+  .btn-primary>*,.btn-clay>*{position:relative;z-index:1}
+  .btn-primary::after,.btn-clay::after{content:"";position:absolute;top:0;left:-130%;width:55%;height:100%;
+    background:linear-gradient(110deg,transparent,rgba(255,255,255,.5),transparent);transform:skewX(-20deg);pointer-events:none}
+  .btn-primary:hover::after,.btn-clay:hover::after{animation:shine .85s ease}
+  @keyframes shine{to{left:140%}}
+
+  /* benefit icon micro-interaction */
+  .b-card .ico{transition:transform .3s ease, background .3s ease}
+  .b-card:hover .ico{transform:rotate(-7deg) scale(1.09);background:var(--clay-l);color:var(--clay)}
+
+  /* certificate seal pulse */
+  .cert-paper .seal{animation:sealpulse 2.8s ease-in-out infinite}
+  @keyframes sealpulse{0%,100%{box-shadow:0 0 0 0 rgba(27,110,95,.35)}50%{box-shadow:0 0 0 12px rgba(27,110,95,0)}}
+
+  /* reduced motion */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .reveal{opacity:1!important;transform:none!important}
+    .hero-aurora{display:none}
+  }
+
   /* ---------- responsive ---------- */
   @media (max-width:920px){
     .hero-grid,.t-grid,.cert-grid{grid-template-columns:1fr}
@@ -337,6 +383,8 @@ fbq('track', 'PageView');
 </head>
 <body>
 
+<div class="scroll-progress" id="progress"></div>
+
 <!-- ============ HEADER ============ -->
 <header id="hdr">
   <div class="wrap nav">
@@ -363,6 +411,7 @@ fbq('track', 'PageView');
 
 <!-- ============ HERO ============ -->
 <section class="hero" id="top">
+  <div class="hero-aurora" aria-hidden="true"><span class="a1"></span><span class="a2"></span><span class="a3"></span></div>
   <div class="wrap hero-grid">
     <div class="hero-copy reveal">
       <span class="eyebrow">Курс для подологів · Київ</span>
@@ -553,7 +602,7 @@ fbq('track', 'PageView');
       </div>
       <div class="price-body">
         <div class="price-row">
-          <span class="amount">15 000</span><span class="cur">грн за курс</span>
+          <span class="amount" id="priceAmount" data-to="15000">15 000</span><span class="cur">грн за курс</span>
         </div>
         <ul class="price-incl">
           <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Теорія онлайн + доступ до запису</li>
@@ -661,9 +710,44 @@ fbq('track', 'PageView');
   // year
   document.getElementById('yr').textContent = new Date().getFullYear();
 
-  // sticky header shadow
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // sticky header shadow + scroll progress bar
   const hdr = document.getElementById('hdr');
-  addEventListener('scroll', () => hdr.classList.toggle('scrolled', scrollY > 12));
+  const progress = document.getElementById('progress');
+  function onScroll(){
+    hdr.classList.toggle('scrolled', scrollY > 12);
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    progress.style.width = (max > 0 ? (scrollY / max) * 100 : 0) + '%';
+  }
+  addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+
+  // price count-up when in view
+  const priceEl = document.getElementById('priceAmount');
+  if (priceEl){
+    const target = +priceEl.dataset.to;
+    const fmt = n => Math.round(n).toLocaleString('uk-UA').replace(/,/g,' ');
+    if (reduceMotion){
+      priceEl.textContent = fmt(target);
+    } else {
+      const cio = new IntersectionObserver((es) => {
+        es.forEach(e => {
+          if (!e.isIntersecting) return;
+          cio.disconnect();
+          const dur = 1100, t0 = performance.now();
+          (function step(now){
+            const p = Math.min((now - t0) / dur, 1);
+            const eased = 1 - Math.pow(1 - p, 3);
+            priceEl.textContent = fmt(target * eased);
+            if (p < 1) requestAnimationFrame(step);
+          })(t0);
+        });
+      }, {threshold:.6});
+      cio.observe(priceEl);
+    }
+  }
 
   // mobile menu
   const burger = document.getElementById('burger');
